@@ -35,9 +35,9 @@ FreeZTP is a dynamic TFTP server built to automatically configure Cisco Catalyst
 
 -----------------------------------------
 ##   REQUIREMENTS   ##
-OS: Tested on **CentOS/RHEL 7 and 8** (Recommended), **Ubuntu 16 and 18**, and **Raspbian**
+OS: Tested on  **Raspbian**
 
-Interpreter: **Python 2.7.5+**
+Interpreter: **Python 3.9.2**
 
 
 -----------------------------------------
@@ -83,7 +83,7 @@ Make sure you are logged in as root or are able to `sudo su` to install and oper
 			- `sudo python get-pip.py`
 	- **Raspbian:** [Raspbian Minimal Server - Post-Install Setup][raspbian-post-install]
 		- Make sure to install python-pip and git for Raspbian
-			- `sudo apt install -y python-pip`
+			- `sudo apt install -y python3-pip`
 			- `sudo apt-get install -y git`
 2. Download the FreeZTP repository using Git
 	- `git clone https://github.com/packetsar/freeztp.git`
