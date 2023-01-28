@@ -21,8 +21,9 @@ import curses
 import socket
 import logging
 import platform
-import commands
+import subprocess
 import threading
+import distro
 
 
 class os_detect:
@@ -32,7 +33,7 @@ class os_detect:
 		self._pkgmgr = self._pkgmgr_detect()
 		self._make_names()
 	def _systemd_detect(self):
-		checksystemd = commands.getstatusoutput("systemctl")
+		checksystemd = subprocess.getstatusoutput("systemctl")
 		if len(checksystemd[1]) > 50 and "Operation not permitted" not in checksystemd[1]:
 			return True
 		else:
@@ -41,11 +42,11 @@ class os_detect:
 		checkpkgmgr = {}
 		checknames = ["yum", "apt", "apt-get"]
 		for mgr in checknames:
-			checkpkgmgr.update({len(commands.getstatusoutput(mgr)[1]): mgr})
+			checkpkgmgr.update({len(subprocess.getstatusoutput(mgr)[1]): mgr})
 		pkgmgr = checkpkgmgr[sorted(list(checkpkgmgr), key=int)[len(sorted(list(checkpkgmgr), key=int)) - 1]]
 		return pkgmgr
 	def _dist_detect(self):
-		distlist = platform.linux_distribution()
+		distlist = distro.name(pretty=True)
 		if "centos" in distlist[0].lower():
 			return "centos"
 		elif "red hat" in distlist[0].lower() and float(distlist[1] > 8):
@@ -56,9 +57,12 @@ class os_detect:
 			return "ubuntu"
 		elif "debian" in distlist[0].lower():
 			return "debian"
+		elif "raspbian" in distlist.lower():
+			return "debian"
 		else:
 			print("Unsupported OS Type! Please create an issue at https://github.com/PackeTsar/freeztp/issues and include below information.")
-			print(platform.linux_distribution())
+			print(distro.name(pretty=True))
+			print(distlist[0])
 			sys.exit()
 	def _make_names(self):
 		if self._dist == "centos":
@@ -88,7 +92,7 @@ class os_detect:
 		elif self._dist == "debian":
 			self.DHCPSVC = "isc-dhcp-server"
 			self.DHCPPKG = "isc-dhcp-server"
-			self.PIPPKG = "python-pip"
+			self.PIPPKG = "python3-pip"
 			self.PKGDIR = "/usr/local/lib/python2.7/dist-packages/"
 			self.DHCPLEASES = "/var/lib/dhcp/dhcpd.leases"
 	def service_control(self, cmd, service):
@@ -1013,7 +1017,7 @@ class config_manager:
 		self.save()
 	def multilineinput(self, ending):
 		result = ""
-		for line in iter(raw_input, ending):
+		for line in iter(input, ending):
 			result += line+"\n"
 		return result[0:len(result)-1]
 	def set_integration(self, iden, key, value):
@@ -1357,8 +1361,10 @@ class config_manager:
 		# Basedata meaning as follows:
 		### 00 00 00 09 = Cisco vendor specific code
 		basedata = "000000090a05"
-		filenamedata = self.running["imagediscoveryfile"].encode("hex")
-		lenval = hex(len(filenamedata)/2).replace("0x", "")
+		#filenamedata = self.running["imagediscoveryfile"].encode("hex")
+		filenamedata = self.running["imagediscoveryfile"].encode().hex()
+		#lenval = hex(len(filenamedata)/2).replace("0x", "")
+		lenval = hex(round(len(filenamedata)/2)).replace("0x", "")
 		if len(lenval) < 2:
 			lenval = "0"+lenval
 		return basedata+lenval+filenamedata
@@ -1408,7 +1414,7 @@ class config_manager:
 		- Close the Windows DHCP Server admin window
 			""" % self.calcopt125hex())
 		elif mode == "cisco":
-			optiondata = self.running["imagediscoveryfile"].encode("hex")
+			optiondata = self.running["imagediscoveryfile"].codecs.encode().hex()
 			console("\n\nAdd the below line to your 'ip dhcp pool XXXX' config:\n")
 			console("option 125 hex %s\n\n" % self.ciscohex(self.calcopt125hex()))
 		elif mode == "isc":
@@ -1663,12 +1669,16 @@ class config_manager:
 		iflist = []
 		console("  Found: %s\nCreating Scopes..." % ips)
 		for net in ips:
-			scopename = "INTERFACE-" + net[0].encode().upper()
+			#scopename = "INTERFACE-" + str(net[0].encode().upper())
+			scopename = "INTERFACE-" + str(net[0].upper())
 			console("  Building Scope %s" % scopename)
-			if net[2].encode() == "255.255.255.255":
+			#if net[2].encode() == "255.255.255.255":
+			if net[2] == "255.255.255.255":
 				console("    WARNING: Scope %s has a /32 subnet size. You may need to adjust it if you want to serve IP addresses on that subnet" % scopename)
-			subnet = net[3].encode()
-			myip = net[1].encode()
+			#subnet = net[3].encode()
+			#myip = net[1].encode()
+			subnet = net[3]
+			myip = net[1]
 			cmd1 = "ztp set dhcpd %s subnet %s" % (scopename, subnet)
 			api1 = ['ztp', 'set', 'dhcpd', scopename, 'subnet', subnet]
 			cmd2 = "ztp set dhcpd %s ztp-tftp-address %s" % (scopename, myip)
@@ -1765,8 +1775,8 @@ class installer:
 			import requests
 		except ImportError:
 			console("\n\nInstalling some new dependencies...\n")
-			os.system("pip install requests")
-			os.system("pip install requests_toolbelt")
+			os.system("pip3 install requests")
+			os.system("pip3 install requests_toolbelt")
 	def snmp_name_fix(self):
 		console("\n\nChecking for incompatible SNMP OID names")
 		changes = False
@@ -1799,6 +1809,7 @@ class installer:
 		f.close()
 		console("Config File Created at " + configfilepath + configfilename)
 	def install_tftpy(self):
+
 		console("Downloading tftpy library from https://github.com/PackeTsar/tftpy/archive/master.tar.gz...")
 		os.system("curl -OL https://github.com/PackeTsar/tftpy/archive/master.tar.gz")
 		console("Installing tftpy library...")
@@ -1818,17 +1829,17 @@ class installer:
 		osd.install_pkg(osd.PIPPKG)
 		osd.install_pkg("gcc gmp python-devel")
 		osd.install_pkg("telnet")
-		os.system("pip install pysnmp")
-		os.system("pip install requests")
-		os.system("pip install requests_toolbelt")
-		os.system("pip install jinja2")
-		os.system("pip install netaddr")
-		os.system("pip install netifaces")
-		os.system("pip install isc_dhcp_leases")
+		os.system("pip3 install pysnmp")
+		os.system("pip3 install requests")
+		os.system("pip3 install requests_toolbelt")
+		os.system("pip3 install jinja2")
+		os.system("pip3 install netaddr")
+		os.system("pip3 install netifaces")
+		os.system("pip3 install isc_dhcp_leases")
 	def dhcp_setup(self):
 		console("\n\nInstalling DHCPD...\n")
-		osd.install_pkg(osd.DHCPPKG)
-		osd.service_control("enable", osd.DHCPSVC)
+		# osd.install_pkg(osd.DHCPPKG)
+		# osd.service_control("enable", osd.DHCPSVC)
 		console("\n\nSucking in config file...\n")
 		global config
 		config = config_manager()
@@ -3075,7 +3086,8 @@ class persistent_store:
 	def _write(self):
 		fulldb = self._pull_full_db()  # Pull a full copy of the db
 		fulldb.update({self._dbid: self._running})  # Update it
-		rawout = json.dumps(fulldb, indent=4, sort_keys=True)
+		# rawout = json.dumps(fulldb, indent=4, sort_keys=True)
+		rawout = json.dumps(fulldb, indent=4)
 		f = open(self._file, "w")
 		f.write(rawout)
 		f.close()
@@ -3175,7 +3187,7 @@ class integration_spark:
 				- roomId
 				- toPersonEmail
 				- toPersonId""")
-		akey = raw_input("Enter your Cisco Spark API Key > ")
+		akey = input("Enter your Cisco Spark API Key > ")
 		self.config.update({"api-key": akey})  # Update API key entry
 		console("Testing API Key:")
 		console(make_table(["displayName", "emails"], [self._get("https://api.ciscospark.com/v1/people/me")])+"\n\n")
@@ -3186,9 +3198,9 @@ class integration_spark:
 			selection = integrations.table_select(["title"], rooms, "Select a Room")
 			value = selection["id"]
 		elif dtype["destination type"] == "toPersonEmail":
-			value = raw_input("Enter the %s value > " % dtype["destination type"])
+			value = input("Enter the %s value > " % dtype["destination type"])
 		elif dtype["destination type"] == "toPersonId":
-			value = raw_input("Enter the %s value > " % dtype["destination type"])
+			value = input("Enter the %s value > " % dtype["destination type"])
 		self.config.update({dtype["destination type"]: value})
 		return self.config
 
@@ -3263,7 +3275,7 @@ class integration_power_automate:
 			'}\r\n'
 			'\r\n'
 		)
-		url = raw_input("Enter your Power Automate Webhook URL.> ")
+		url = input("Enter your Power Automate Webhook URL.> ")
 		self.config.update({"url": url})  # Update API key entry
 		return self.config
 
@@ -3338,7 +3350,7 @@ class integration_main:
 			index += 1
 		columnorder = ["#"] + columnorder
 		console(make_table(columnorder, tabdata))
-		selection = raw_input(message+" [1] ")
+		selection = input(message+" [1] ")
 		if not selection:
 			selection = "1"
 		elif selection not in lookup:
@@ -3555,31 +3567,31 @@ class external_templates_main:
 			else:
 				# log("ERROR: Cannot find template file ({})".format(filepath))
 				pass
-
-
-
-
 ##### TFTP Server main entry. Starts the TFTP server listener and is the  #####
 #####   main program loop. It is started with the ztp_dyn_file class      #####
 #####   passed in as the dynamic file function.                           #####
 def start_tftp():
+	log("start_tftp: Starting Up TFTPy")
+	#print(sys.path)
+	sys.path.insert(0,"/home/pi/.local/lib/python3.9/site-packages/")
 	global tftpy
 	import tftpy
-	try:
-		tftpy.TftpContextServer.start = start  # Overwrite the function
-		tftpy.TftpContextServer.end = end  # Overwrite the function
-		tftpy.TftpStateExpectACK.sendDAT = sendDAT
-	except NameError:
-		pass
-	log("start_tftp: Starting Up TFTPy")
-	#tftpy.setLogLevel(logging.DEBUG)
+
+	#try:
+	#	tftpy.TftpContextServer.start = start  # Overwrite the function
+	#	tftpy.TftpContextServer.end = end  # Overwrite the function
+	#	tftpy.TftpStateExpectACK.sendDAT = sendDAT
+	#except NameError:
+	#	pass
+	
+	#tftpy.TftpShared.setLogLevel(logging.DEBUG)
 	try:
 		server = tftpy.TftpServer(config.running["tftproot"], dyn_file_func=interceptor)
 	except tftpy.TftpShared.TftpException:
 		log("start_tftp: ERROR: TFTP Root path doesn't exist. Creating...")
 		os.system('mkdir -p ' + config.running["tftproot"])
 		server = tftpy.TftpServer(config.running["tftproot"], dyn_file_func=interceptor)
-	server.listen(listenip="", listenport=69)
+	server.listen(listenip="0.0.0.0", listenport=69)
 	log("start_tftp: Started up successfully")
 
 
@@ -3627,23 +3639,24 @@ def interpreter():
 	##### INSTALL #####
 	elif arguments == "install":
 		console("***** Are you sure you want to install FreeZTP using version %s?*****" % version)
-		answer = raw_input(">>>>> If you are sure you want to do this, type in 'CONFIRM' and hit ENTER >>>>")
+		#answer = input(">>>>> If you are sure you want to do this, type in 'CONFIRM' and hit ENTER >>>>")
+		answer = "confirm"
 		if answer.lower() == "confirm":
 			inst = installer()
 			inst.copy_binary()
-			inst.create_configfile()
-			inst.install_completion()
-			inst.install_tftpy()
-			inst.disable_firewall()
-			inst.install_dependencies()
-			inst.create_service()
-			inst.dhcp_setup()
+			# inst.create_configfile()
+			# inst.install_completion()
+			# inst.install_tftpy()
+			# inst.disable_firewall()
+			# inst.install_dependencies()
+			# inst.create_service()
+			# inst.dhcp_setup()
 			console("\nInstall complete! Logout and log back into SSH to activate auto-complete")
 		else:
 			console("Install/upgrade cancelled")
 	elif arguments == "upgrade":
 		console("***** Are you sure you want to upgrade FreeZTP using version %s?*****" % version)
-		answer = raw_input(">>>>> If you are sure you want to do this, type in 'CONFIRM' and hit ENTER >>>>")
+		answer = input(">>>>> If you are sure you want to do this, type in 'CONFIRM' and hit ENTER >>>>")
 		if answer.lower() == "confirm":
 			inst = installer()
 			inst.copy_binary()
