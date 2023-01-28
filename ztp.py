@@ -3086,7 +3086,8 @@ class persistent_store:
 	def _write(self):
 		fulldb = self._pull_full_db()  # Pull a full copy of the db
 		fulldb.update({self._dbid: self._running})  # Update it
-		rawout = json.dumps(fulldb, indent=4, sort_keys=True)
+		# rawout = json.dumps(fulldb, indent=4, sort_keys=True)
+		rawout = json.dumps(fulldb, indent=4)
 		f = open(self._file, "w")
 		f.write(rawout)
 		f.close()
@@ -3649,7 +3650,7 @@ def interpreter():
 			# inst.disable_firewall()
 			# inst.install_dependencies()
 			# inst.create_service()
-			inst.dhcp_setup()
+			# inst.dhcp_setup()
 			console("\nInstall complete! Logout and log back into SSH to activate auto-complete")
 		else:
 			console("Install/upgrade cancelled")
